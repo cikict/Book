@@ -1,0 +1,55 @@
+# Prepare Data
+# Import the libraries for classification to include pipeline
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+
+from pyspark.ml import import Pipeline
+from pyspark.ml.classification import LinearRegression
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
+from pyspark.ml.evaluation import RegressionEvaluator
+
+
+# Load the flight dataset
+csv = spark.read.csv('wasb:///data/flights.csv', inferSchema=True, header=True )
+
+
+# Select features and labels
+data = csv.select("DayofMonth","DayOfWeek", "Carrier", "OriginAirportID", "DestAirportID","DepDelay",col("ArrDelay").alias("label"))
+
+
+# Split the data
+splits = data.randomSplit([0.7, 0.3])
+train = splits[0]
+test = splits[1].withColumnRenamed("label", "trueLabel")
+
+
+# 2. Define the pipeline
+assembler = VectorAssembler( inputCols = ["DayofMonth","DayOfWeek", "OriginAirportID", "DestAirportID","DepDelay"], outputCol="features")
+lr = LinearRegression( labelCol="label", featuresCol="features") # Use default parameters
+pipeline = Pipeline( stages=[assembler, lr] )
+
+
+# 3. Tune Parameters
+paramGrid = ParamGridBuilder().addGrid( lr.regParams, [0.3, 0.01]).addGrid(lr.maxIter, [10, 5]).build()
+cv = CrossValidator( estimator=pipeline, evaluator=RegressionEvaluator(), estimatorParamMaps=paramGrid, numFolds=2)
+model = cv.fit( train)
+
+
+# 4. Test the model
+prediction = model.transform( test)
+predicted = prediction.select( "prediction", "probability". "trueLable")
+predicted.show(100, truncate=False)
+
+
+# 5. Examine the Predicted and Actual Values
+predicted.createOrReplaceTempView("regressionPredictions")
+
+%%sql
+SELECT trueLable, prediction FROM regressionPredictions
+
+
+# 6. Retrieve Root Mean Square Error (RMSE)
+evaluator = RegressionEvaluator( labelCol="trueLabel", predictionCol="prediction", metricName="rmse")
+rmse = evaluator.evaluate( prediction )
+print "Root Mean Square (RMSE):", rmse

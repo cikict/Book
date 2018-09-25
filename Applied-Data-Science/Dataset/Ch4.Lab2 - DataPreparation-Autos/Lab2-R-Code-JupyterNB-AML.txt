@@ -1,0 +1,52 @@
+
+# Visualize Outlier Code - to be pasted into Jupyter Notebook invoked from Azure ML
+
+auto.price <- dat
+
+vis.simple <- function(col1, df = auto.price, col2 = 'lnprice'){
+   require(ggplot2) # make sure ggplot2 is loaded   
+   title = paste('Plot of', col1, 'vs.', col2) # create the title   
+   ggplot(df, aes_string(col1, col2)) + geom_point() + ggtitle(title) 
+} 
+ 
+## Scatter plots of select columns 
+plot.cols <- c("weight","enginesize","citympg") 
+lapply(plot.cols, vis.simple) # apply the plot columns to function 
+
+
+
+
+# Visualize outliers code with Aesthetics - To be run within Jupyter Notebook invoked from Azure ML
+auto.price <- dat
+
+vis.outlier <- function(col1 = 'citympg'){   
+
+   require(ggplot2) # make sure ggplot2 is loaded   
+
+   ## convert character columns to factors for plotting   
+   auto.price[,"outlier"] <- as.factor(auto.price[,"outlier"])
+   auto.price[,"fueltype"] <- as.factor(auto.price[,"fueltype"])
+   title = paste('Plot of', col1, 'vs.lnprice') # title string 
+   ggplot(auto.price, aes_string(col1, 'lnprice')) +
+          geom_point(aes(color = outlier,shape = fueltype, 
+          alpha = 0.5, size = 4)) + ggtitle(title) 
+}  
+
+id.outlier <- function(df) {
+   ## Use ifelse to filter for outliers   
+   df[, "outlier"] <- ifelse (df[,"enginesize"] > 190 |
+                              df[, "weight"] > 3500| 
+                              df[, "citympg"] > 40, '1',
+                              '0')      
+   df 
+}
+
+## ID and plot outliers 
+require(dplyr) # make sure dplyr is loaded 
+
+## set the columns to plot 
+plot.cols <-c("weight","enginesize","citympg") 
+auto.price <- id.outlier(auto.price) # id outliers 
+lapply(plot.cols, vis.outlier)  # plot the results 
+out <- auto.price %>% filter(outlier == 1) # return the outliers 
+
